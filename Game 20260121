@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>智慧醫療互動題庫：AI / BI / CI / $</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial, sans-serif; }
+    body { margin: 0; padding: 24px; background: #f6f7fb; color: #111; }
+    .wrap { max-width: 1020px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 6px 24px rgba(0,0,0,.08); }
+    h1 { font-size: 20px; margin: 0 0 10px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .progress { font-size: 13px; opacity: .8; }
+    .scoreboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 16px; }
+    .pill { background: #f2f4ff; border: 1px solid #e3e7ff; border-radius: 12px; padding: 10px 12px; }
+    .pill .k { font-size: 12px; opacity: .75; }
+    .pill .v { font-size: 22px; font-weight: 700; margin-top: 4px; }
+
+    .qTitle { font-size: 16px; line-height: 1.6; margin: 10px 0 14px; }
+    .qSub { font-size: 14px; opacity: .85; margin-top: 6px; }
+    .options { display: grid; gap: 10px; }
+    button.opt {
+      text-align: left;
+      border: 1px solid #e6e6e6;
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: transform .04s ease, box-shadow .12s ease, border-color .12s ease;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    button.opt:hover { border-color: #cfd6ff; box-shadow: 0 8px 22px rgba(0,0,0,.06); }
+    button.opt:active { transform: translateY(1px); }
+    button.opt[disabled] { opacity: .6; cursor: not-allowed; }
+
+    .meta { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+    .tag { font-size: 12px; background: #f7f7f7; border: 1px solid #eee; padding: 6px 10px; border-radius: 999px; }
+
+    .analysis {
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #f9fbff;
+      border: 1px dashed #cfd6ff;
+      display: none;
+    }
+    .analysis h2 { font-size: 16px; margin: 0 0 8px; }
+    .analysis p { margin: 6px 0; line-height: 1.6; }
+    .analysis ul { margin: 8px 0 0 18px; }
+    .analysis li { margin: 6px 0; }
+
+    .actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      border-radius: 12px;
+      padding: 10px 12px;
+      border: 1px solid #e6e6e6;
+      background: #fff;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn:hover { border-color: #cfd6ff; }
+    .btn.primary { border-color: #cfd6ff; background: #f2f4ff; }
+    .btn[disabled] { opacity: .6; cursor: not-allowed; }
+
+    .divider { height: 1px; background: #eee; margin: 14px 0; }
+    .hint { font-size: 13px; opacity: .75; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="application" aria-label="互動題目">
+      <div class="row" style="justify-content: space-between;">
+        <h1 style="margin:0;">智慧醫療互動題庫（AI / BI / CI / $）</h1>
+        <div class="progress" id="progress">第 1 / 12 題</div>
+      </div>
+
+      <div class="scoreboard" aria-label="積分板">
+        <div class="pill"><div class="k">AI</div><div class="v" id="sAI">0</div></div>
+        <div class="pill"><div class="k">BI</div><div class="v" id="sBI">0</div></div>
+        <div class="pill"><div class="k">CI</div><div class="v" id="sCI">0</div></div>
+        <div class="pill"><div class="k">$</div><div class="v" id="sMoney">0</div></div>
+      </div>
+
+      <div class="qTitle" id="qTitle"></div>
+      <div class="qSub" id="qSub"></div>
+      <div class="options" id="options"></div>
+
+      <div class="meta" aria-label="狀態">
+        <span class="tag" id="picked">尚未作答</span>
+        <span class="tag" id="delta">尚未計分</span>
+      </div>
+
+      <div class="analysis" id="analysis" aria-live="polite">
+        <h2>結果分析</h2>
+        <p id="analysisText"></p>
+        <ul id="analysisBullets"></ul>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="prev">上一題</button>
+        <button class="btn primary" id="next" disabled>下一題</button>
+        <button class="btn" id="resetAll">全部重置</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="hint">
+        規則：選項的「括號內容（積分）」不會先顯示，只有點下去才會在「結果分析」中揭露並更新 AI / BI / CI / $ 積分。<br/>
+        支援負分；完成最後一題會顯示總結。
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== 題庫 ======
+    // 你本輪提供：Level 2~8（共 7 題）
+    // 再加上上一版已經有的 4 題（1~3 + Level1），總共 11 題。
+    // progress 初始文字顯示 12 只是示意，會在 render 時以實際題數覆蓋。
+    const QUESTIONS = [
+      // ===== 基礎題 1~3 =====
+      {
+        id: 1,
+        title: "請問，今天如果你有機會可以主持一場臨床試驗，你覺得影響這場臨床試驗與否最重要的是下面哪個條件？",
+        scene: "",
+        options: [
+          { key:"A", text:"充足的資金", pts:{Money:2}, lead:"你把關鍵押在『錢』：人力、設備、檢驗、追蹤都靠它撐起來。",
+            bullets:["資金夠：比較容易把試驗做完、把流程跑順。","資金不夠：好點子常卡在『做不起來』或『做到一半停住』。","但：錢不是萬能，研究設計與執行品質仍會決定可信度。"]},
+          { key:"B", text:"足夠的受試者樣本數", pts:{BI:1}, lead:"你看重『人要夠多』：資料量足，結論才比較站得住腳。",
+            bullets:["樣本多：比較容易看出差異，不會因為人太少而『看不出來』。","樣本少：結果可能忽大忽小，今天像有效、明天又像沒效。","但：招募也要時間、資源與倫理流程配合。"]},
+          { key:"C", text:"嚴謹的研究設計", pts:{CI:1}, lead:"你把重心放在『設計』：先把偏差擋掉，才有機會談因果。",
+            bullets:["設計嚴謹：更能排除干擾因素，避免『看似有效其實誤導』。","設計鬆散：容易被偏差、混雜帶著走。","但：設計再好，現場執行不穩也會讓資料變差。"]},
+          { key:"D", text:"臨床試驗執行者有沒有遵照 SOP 進行", pts:{}, lead:"你相信『SOP 落實』能決定資料品質：同一套規則，結果才可比。",
+            bullets:["SOP 做到位：資料更一致，減少『不同人做就不一樣』的雜訊。","SOP 沒落實：再好的計畫也可能被執行細節拖垮。","但：資金、樣本與設計仍會限制你能回答的問題。"]}
+        ]
+      },
+
+      {
+        id: 2,
+        title: "在臨床前試驗中，你成功找出四個化學合成物具有潛在抗癌活性，你覺得哪一個最有潛力進入臨床試驗？",
+        scene: "",
+        options: [
+          { key:"A", text:"研究人員透過日經月累的動物實驗找出的潛在治療成分", pts:{CI:1},
+            lead:"你偏好『循序驗證』：一步一步把有效性與安全性證據堆起來。",
+            bullets:["優點：累積的實驗證據多，進到臨床前通常更踏實。","風險：花時間、花人力，速度可能比較慢。","你在意的是：證據品質與可重現性（CI）。"]},
+          { key:"B", text:"透過最先進的 AI 探勘科技結合蛋白質結構找出之特異性單株抗體", pts:{AI:1},
+            lead:"你押注『科技加速』：用 AI 把候選藥物的篩選與設計跑得更快。",
+            bullets:["優點：速度快、方向可能更精準（例如標靶）。","風險：模型再漂亮，也得回到實驗與臨床驗證。","你在意的是：技術槓桿（AI）。"]},
+          { key:"C", text:"透過高價收購其他研究室開發之活性成分", pts:{BI:2},
+            lead:"你選擇『買時間』：用資源整合，把別人做到的成果接過來。",
+            bullets:["優點：可能接到更成熟的候選物，省去一段開發期。","風險：要確認資料完整、專利與可重現性。","你在意的是：資源/佈局與落地速度（BI）。"]},
+          { key:"D", text:"為了節省成本，先用傳統中藥草淬鍊出之有效成分", pts:{Money:1},
+            lead:"你先顧『成本可行』：用較省錢方式先做出可測的候選成分。",
+            bullets:["優點：初期投入較小，容易啟動專案。","風險：成分一致性、純化與品質控管可能很難。","你在意的是：起步門檻與成本（$）。"]}
+        ]
+      },
+
+      {
+        id: 3,
+        title: "藥物成功上市後，突然收到一系列不良反應通報，政府要求重新評估安全性。你會選擇哪一種作法？",
+        scene: "",
+        options: [
+          { key:"A", text:"透過不良反應通報中間收集之個案進行上市後研究", pts:{BI:1, Money:1},
+            lead:"你走『用現成資料先釐清』路線：先把問題輪廓畫出來。",
+            bullets:["優點：速度快、成本相對可控。","風險：通報資料可能不完整或有偏差，需要小心解讀。","你在意的是：資料/資源動員（BI）與成本（$）。"]},
+          { key:"B", text:"重新進行大型臨床試驗以確保藥物安全性", pts:{Money:-2},
+            lead:"你選『最硬派的再驗證』：用最大代價換最大說服力。",
+            bullets:["優點：若做得好，證據說服力強。","代價：非常燒錢、耗時，可行性與倫理也更難。","你接受的是：用成本換確定性（$ 下降）。"]},
+          { key:"C", text:"透過真實世界數據進行觀察性研究評估藥物安全性", pts:{CI:1, Money:1},
+            lead:"你走『真實世界快速評估』：樣本大、貼近臨床情境。",
+            bullets:["優點：速度快、樣本大。","風險：需要嚴謹設計處理偏差與混雜。","你在意的是：研究方法（CI）與成本（$）。"]},
+          { key:"D", text:"透過動物實驗重新分析相關毒理特性", pts:{},
+            lead:"你先回到『機轉/毒理』：想弄清楚為什麼會發生，再決定下一步。",
+            bullets:["優點：可能找出不良反應的機轉，幫助風險管理。","限制：動物結果不一定能完全對上人類情境。","你在意的是：先釐清原因，再談策略。"]}
+        ]
+      },
+
+      // ===== Level 1 =====
+      {
+        id: "Level 1",
+        title: "AI 寫作業幫手（肺癌篩檢）",
+        scene: "情境：廠商推銷 99% 準確的 AI，想用它來「全自動」發報告。你會怎麼做？",
+        options: [
+          { key:"A", text:"全自動化（AI 直接發報告）", pts:{AI:2, Money:1, CI:-2, BI:-2},
+            lead:"你選『科技開到最大』：效率與成本優先，但同時把風險也放大。",
+            bullets:["AI +2：技術運用極大化。","$ +1：省人力，短期更賺。","CI -2：誤判可能延誤治療，品質風險上升。","BI -2：出事容易炎上，社會信任大跌。"]},
+          { key:"B", text:"醫師輔助模式（人機合作、醫師把關）", pts:{AI:1, CI:2, Money:-1},
+            lead:"你選『人機協作』：AI 幫忙，但關鍵仍由專業把關。",
+            bullets:["AI +1：科技有在用，而且用在對的地方。","CI +2：雙重確認，品質更穩。","$ -1：系統成本 + 人力仍在。"]},
+          { key:"C", text:"拒絕引進（暫不使用）", pts:{AI:-1},
+            lead:"你選『先觀望』：降低未知風險，但也可能錯過改進機會。",
+            bullets:["AI -1：科技導入停滯，可能落後。","$ 0：不花錢也不省錢。","短期穩，但長期可能失去改善流程機會。"]}
+        ]
+      },
+
+      // ===== Level 2 =====
+      {
+        id: "Level 2",
+        title: "賣數據賺外快（藥廠合作）",
+        scene: "情境：藥廠出價一億買病歷數據。",
+        options: [
+          { key:"A", text:"直接賣數據（炎上危機）", pts:{Money:3, BI:-3},
+            lead:"你選『短期暴富』：錢到位，但隱私與信任可能直接爆炸。",
+            bullets:["$ +3：瞬間暴富！","BI -3：被罵販賣隱私、抵制、品牌信用崩。","AI 0：只是賣資料，技術沒提升。"]},
+          { key:"B", text:"拒絕出售（高風亮節）", pts:{BI:1, Money:-1},
+            lead:"你選『守底線』：守住隱私與信任，但資金機會飛走。",
+            bullets:["BI +1：守護隱私，獲得好評。","$ -1：錯失資金，設備更新可能變慢。"]},
+          { key:"C", text:"聯邦學習（最強大腦）", pts:{AI:2, Money:1, BI:1},
+            lead:"你走『雙贏技術路線』：既要成果，也要隱私。",
+            bullets:["AI +2：用最先進的隱私運算/聯邦學習。","$ +1：技術合作費，雖不賣斷那麼多但夠用。","BI +1：保護隱私又有產出，形象加分。"]}
+        ]
+      },
+
+      // ===== Level 3 =====
+      {
+        id: "Level 3",
+        title: "離島連線大作戰（偏鄉醫療）",
+        scene: "情境：網路超爛的離島，要怎麼看診？",
+        options: [
+          { key:"A", text:"買視訊機器人（浪費錢）", pts:{Money:-2, CI:-1},
+            lead:"你選『硬上設備』：看起來很潮，但基礎建設不行就會翻車。",
+            bullets:["$ -2：機器人超貴。","CI -1：網路卡到看不清楚，診斷品質下降。"]},
+          { key:"B", text:"非同步傳照片（懂變通）", pts:{CI:1, Money:1},
+            lead:"你選『用現有工具解問題』：不求炫，但求能用、好用。",
+            bullets:["CI +1：照片清晰，醫生更能判斷。","$ +1：用手機就能做，省錢又有效。"]},
+          { key:"C", text:"醫生搭船去（暈船）", pts:{CI:1, Money:-2, AI:-1},
+            lead:"你選『人到現場最準』：品質有，但成本與可擴充性差。",
+            bullets:["CI +1：現場看最準。","$ -2：交通 + 醫師時間成本太高。","AI -1：完全沒用到智慧醫療。"]}
+        ]
+      },
+
+      // ===== Level 4 =====
+      {
+        id: "Level 4",
+        title: "智慧手錶太神經質（警示疲勞）",
+        scene: "情境：手錶一直亂叫救護車。",
+        options: [
+          { key:"A", text:"關掉警報（鴕鳥心態）", pts:{BI:1, CI:-2},
+            lead:"你選『安靜優先』：客訴可能少，但真的危險時也沒人救。",
+            bullets:["BI +1：用戶耳根清淨，客訴變少。","CI -2：真的心臟病發卻沒叫，可能出人命。"]},
+          { key:"B", text:"AI 二次確認（Debug 大師）", pts:{AI:2, CI:1, Money:-1},
+            lead:"你選『把系統修到準』：用技術降低假警報，保住信任與安全。",
+            bullets:["AI +2：演算法更聰明，能分辨運動 vs 生病。","CI +1：抓得準，救得對。","$ -1：要花工程師的錢。"]},
+          { key:"C", text:"維持現狀（狼來了）", pts:{BI:-2},
+            lead:"你選『不動』：最省事，但用戶可能直接用腳投票。",
+            bullets:["BI -2：用戶覺得產品很爛，退貨、負評。"]}
+        ]
+      },
+
+      // ===== Level 5 =====
+      {
+        id: "Level 5",
+        title: "電腦被駭客綁架（勒索病毒）",
+        scene: "情境：醫院系統被鎖，勒索 100 萬。",
+        options: [
+          { key:"A", text:"付錢了事（助長犯罪）", pts:{CI:1, Money:-2, BI:-2},
+            lead:"你選『先救急』：系統快回來，但也可能變成更好勒索的目標。",
+            bullets:["CI +1：系統秒恢復，病人能開刀。","$ -2：付出一大筆贖金。","BI -2：被貼『軟柿子』標籤，且像在支持犯罪。"]},
+          { key:"B", text:"備份還原（真男人）", pts:{Money:-1, BI:1, CI:-1},
+            lead:"你選『長期硬派』：不妥協，但短期會痛一波。",
+            bullets:["$ -1：停機少賺掛號費。","BI +1：不妥協，長期資安形象加分。","CI -1：紙筆作業易出錯，短期品質受影響。"]},
+          { key:"C", text:"裝死轉院（不負責任）", pts:{BI:-3},
+            lead:"你選『放棄』：最省事但最傷名聲，基本上直接 Game Over 路線。",
+            bullets:["BI -3：醫院關門趕人，名聲毀滅。"]}
+        ]
+      },
+
+      // ===== Level 6 =====
+      {
+        id: "Level 6",
+        title: "手術室升級（實用 vs 炫耀）",
+        scene: "情境：預算有限，買氣氛燈還是買鏡頭？",
+        options: [
+          { key:"A", text:"氣氛燈與裝潢（愛現）", pts:{BI:1, Money:-2},
+            lead:"你選『形象先行』：看起來高級，但對手術安全幫助有限。",
+            bullets:["BI +1：好拍、好宣傳，形象加分。","CI 0：對開刀技術沒幫助。","$ -2：裝潢很貴。"]},
+          { key:"B", text:"聯網監測與鏡頭（實用派）", pts:{CI:2, AI:1, Money:-1},
+            lead:"你選『把錢花在刀口上』：安全與可分析性上升。",
+            bullets:["CI +2：看得清楚，手術更安全。","AI +1：手術數據可記錄分析。","$ -1：需要投資設備與系統。"]}
+        ]
+      },
+
+      // ===== Level 7 =====
+      {
+        id: "Level 7",
+        title: "慢性病阿伯不吃藥（依從性）",
+        scene: "情境：怎麼讓阿伯乖乖吃藥？",
+        options: [
+          { key:"A", text:"監控通報（抓耙子）", pts:{CI:1, BI:-2},
+            lead:"你選『壓力驅動』：可能有效，但信任會掉。",
+            bullets:["CI +1：怕被罵所以會吃藥。","BI -2：覺得沒隱私，討厭醫院。"]},
+          { key:"B", text:"遊戲化獎勵（人性大師）", pts:{CI:1, BI:1, Money:-1},
+            lead:"你選『讓他自願』：用人性與動機把依從性拉起來。",
+            bullets:["CI +1：為了集點主動吃藥，身體變好。","BI +1：玩得開心，還會介紹朋友來。","$ -1：要花錢買禮物。"]}
+        ]
+      },
+
+      // ===== Level 8 =====
+      {
+        id: "Level 8",
+        title: "課金才有的治療（基因檢測）",
+        scene: "情境：自費 3 萬的檢測，窮人做不起。",
+        options: [
+          { key:"A", text:"沒錢就沒命（現實殘酷）", pts:{BI:-2},
+            lead:"你選『不處理不平等』：流程最省事，但形象會被打爆。",
+            bullets:["BI -2：被罵死要錢的醫院。","$ 0：醫院沒損失（但信任會損失）。"]},
+          { key:"B", text:"團購殺價 + 補助（雙贏）", pts:{BI:2, CI:1, Money:-1},
+            lead:"你選『把門檻降下來』：社會觀感與醫療效果都能提升。",
+            bullets:["BI +2：社會責任落實，形象大加分。","CI +1：更多人做得起檢測，找到對的藥。","$ -1：少賺或貼補一點。"]},
+          { key:"C", text:"醫院全額付（破產）", pts:{Money:-3},
+            lead:"你選『聖母模式』：救得了人但救不了財報，走向破產危機。",
+            bullets:["$ -3：資金耗盡，醫院倒閉 Game Over。"]}
+        ]
+      }
+    ];
+
+    // ====== 全域狀態 ======
+    const score = { AI: 0, BI: 0, CI: 0, Money: 0 };
+    const answers = new Map(); // index -> { optionKey, pts }
+    let currentIndex = 0;
+
+    // ====== DOM ======
+    const sAI = document.getElementById("sAI");
+    const sBI = document.getElementById("sBI");
+    const sCI = document.getElementById("sCI");
+    const sMoney = document.getElementById("sMoney");
+    const progress = document.getElementById("progress");
+    const qTitle = document.getElementById("qTitle");
+    const qSub = document.getElementById("qSub");
+    const optionsBox = document.getElementById("options");
+    const picked = document.getElementById("picked");
+    const delta = document.getElementById("delta");
+    const analysisBox = document.getElementById("analysis");
+    const analysisText = document.getElementById("analysisText");
+    const analysisBullets = document.getElementById("analysisBullets");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+    const resetAllBtn = document.getElementById("resetAll");
+
+    // ====== 工具 ======
+    function renderScore() {
+      sAI.textContent = score.AI;
+      sBI.textContent = score.BI;
+      sCI.textContent = score.CI;
+      sMoney.textContent = score.Money;
+    }
+
+    function fmtDelta(pts) {
+      const parts = [];
+      const add = (k, v) => {
+        if (!v) return;
+        const sign = v > 0 ? "+" : "";
+        parts.push(`${k}${sign}${v}`);
+      };
+      add("$", pts.Money || 0);
+      add("BI", pts.BI || 0);
+      add("CI", pts.CI || 0);
+      add("AI", pts.AI || 0);
+      return parts.length ? `（${parts.join("；")}）` : "（沒有獎勵點數）";
+    }
+
+    function clearAnalysis() {
+      analysisText.textContent = "";
+      analysisBullets.innerHTML = "";
+      analysisBox.style.display = "none";
+    }
+
+    function showAnalysis(opt, bracket) {
+      analysisText.textContent = `你選了 ${opt.key}. ${opt.text} ${bracket}。${opt.lead || ""}`;
+      const bullets = (opt.bullets || []).map(t => `<li>${t}</li>`).join("");
+      analysisBullets.innerHTML = bullets;
+      analysisBox.style.display = "block";
+      delta.textContent = bracket;
+    }
+
+    function applyPts(pts, mult=1) {
+      score.AI += (pts.AI || 0) * mult;
+      score.BI += (pts.BI || 0) * mult;
+      score.CI += (pts.CI || 0) * mult;
+      score.Money += (pts.Money || 0) * mult;
+    }
+
+    function setAnsweredUI(optionKey, bracket) {
+      picked.textContent = `已作答：選項 ${optionKey}`;
+      delta.textContent = bracket;
+      nextBtn.disabled = false;
+    }
+
+    function setUnansweredUI() {
+      picked.textContent = "尚未作答";
+      delta.textContent = "尚未計分";
+      nextBtn.disabled = true;
+      clearAnalysis();
+    }
+
+    // ====== 渲染題目 ======
+    function renderQuestion() {
+      const q = QUESTIONS[currentIndex];
+      progress.textContent = `第 ${currentIndex + 1} / ${QUESTIONS.length} 題`;
+      qTitle.innerHTML = `<strong>${q.id}.</strong> ${q.title}`;
+      qSub.textContent = q.scene ? q.scene : "";
+
+      optionsBox.innerHTML = "";
+      clearAnalysis();
+
+      const existing = answers.get(currentIndex);
+
+      q.options.forEach(opt => {
+        const btn = document.createElement("button");
+        btn.className = "opt";
+        btn.type = "button";
+        btn.textContent = `${opt.key}. ${opt.text}`;
+
+        if (existing) {
+          btn.disabled = true;
+          if (existing.optionKey === opt.key) btn.style.borderColor = "#cfd6ff";
+        }
+
+        btn.addEventListener("click", () => onPickOption(opt));
+        optionsBox.appendChild(btn);
+      });
+
+      prevBtn.disabled = currentIndex === 0;
+      nextBtn.textContent = (currentIndex === QUESTIONS.length - 1) ? "完成" : "下一題";
+
+      if (existing) {
+        const pickedOpt = q.options.find(o => o.key === existing.optionKey);
+        const bracket = fmtDelta(existing.pts);
+        setAnsweredUI(existing.optionKey, bracket);
+        showAnalysis(pickedOpt, bracket);
+      } else {
+        setUnansweredUI();
+      }
+
+      renderScore();
+    }
+
+    // ====== 作答 ======
+    function onPickOption(opt) {
+      if (answers.get(currentIndex)) return;
+
+      const pts = opt.pts || {};
+      applyPts(pts, 1);
+      answers.set(currentIndex, { optionKey: opt.key, pts });
+
+      // 鎖住所有選項
+      optionsBox.querySelectorAll("button.opt").forEach(b => b.disabled = true);
+
+      const bracket = fmtDelta(pts);
+      setAnsweredUI(opt.key, bracket);
+      showAnalysis(opt, bracket);
+      renderScore();
+
+      // 視覺強調
+      const btns = Array.from(optionsBox.querySelectorAll("button.opt"));
+      const chosen = btns.find(b => b.textContent.startsWith(opt.key + "."));
+      if (chosen) chosen.style.borderColor = "#cfd6ff";
+    }
+
+    // ====== 導航 ======
+    prevBtn.addEventListener("click", () => {
+      if (currentIndex > 0) {
+        currentIndex--;
+        renderQuestion();
+      }
+    });
+
+    nextBtn.addEventListener("click", () => {
+      if (!answers.get(currentIndex)) return;
+
+      if (currentIndex < QUESTIONS.length - 1) {
+        currentIndex++;
+        renderQuestion();
+      } else {
+        // 完成總結
+        analysisBox.style.display = "block";
+        analysisText.textContent = `✅ 你已完成全部 ${QUESTIONS.length} 題！最終積分如下：`;
+        analysisBullets.innerHTML = `
+          <li><strong>AI：</strong>${score.AI}</li>
+          <li><strong>BI：</strong>${score.BI}</li>
+          <li><strong>CI：</strong>${score.CI}</li>
+          <li><strong>$：</strong>${score.Money}</li>
+        `;
+        picked.textContent = "全部完成";
+        delta.textContent = "—";
+        nextBtn.disabled = true;
+      }
+    });
+
+    // ====== 重置 ======
+    resetAllBtn.addEventListener("click", () => {
+      answers.clear();
+      score.AI = 0; score.BI = 0; score.CI = 0; score.Money = 0;
+      currentIndex = 0;
+      renderQuestion();
+    });
+
+    // 初始
+    renderQuestion();
+  </script>
+</body>
+</html>
